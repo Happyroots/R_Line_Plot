@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import datetime
+import gps2xy
 
 def process_file(file_path):
     with open(file_path, 'r') as file:
@@ -9,6 +9,11 @@ def process_file(file_path):
     os_data = []
     ts_data = []
     timeStampFirst = -1.0
+    X_OS_First = -1.0
+    Y_OS_First = -1.0
+    X_TS_First = -1.0
+    Y_TS_First = -1.0
+
     for line in lines:
         if 'OS:1' in line:
             data = dict(item.split(':') for item in line.strip().split('\t'))
@@ -18,8 +23,16 @@ def process_file(file_path):
             time -= timeStampFirst
             time_in_minutes = time / 1000000.0 / 60.0
             Lat = float(data.get('Lat', 0))
+            Lon = float(data.get('Lon', 0))
+            X, Y = gps2xy.WGS84ToWebMercator_Single(Lat, Lon)
             if(Lat == 0):
                 continue
+            if(X_TS_First < 0):
+                X_OS_First = X_TS_First = X
+                Y_OS_First = Y_TS_First = Y
+
+            X -= X_OS_First
+            Y -= Y_OS_First
 
             # Convert timestamp to UTC datetime
             # dt_seconds = datetime.datetime.fromtimestamp(time_in_seconds)
@@ -30,7 +43,9 @@ def process_file(file_path):
                 'SOG': float(data.get('SOG', 0)),
                 'COG': float(data.get('COG', 0)),
                 'Lat': float(data.get('Lat', 0)),
-                'Lon': float(data.get('Lon', 0))
+                'Lon': float(data.get('Lon', 0)),
+                'X':float(X),
+                'Y':float(Y)
             })
         elif 'TS:1' in line:
             data = dict(item.split(':') for item in line.strip().split('\t'))
@@ -40,13 +55,27 @@ def process_file(file_path):
             Lat = float(data.get('Lat', 0))
             if(Lat == 0):
                 continue
+
+            Lon = float(data.get('Lon', 0))
+            X, Y = gps2xy.WGS84ToWebMercator_Single(Lat, Lon)
+
+            if(X_TS_First < 0):
+                continue
+            X -= X_OS_First
+            Y -= Y_OS_First
+
+            if(Lat == 0):
+                continue
             ts_data.append({
                 'Type': 'TS',
                 'Time': time_in_minutes,
                 'SOG': float(data.get('SOG', 0)),
                 'COG': float(data.get('COG', 0)),
                 'Lat': float(data.get('Lat', 0)),
-                'Lon': float(data.get('Lon', 0))
+                'Lon': float(data.get('Lon', 0)),
+                'X':float(X),
+                'Y':float(Y)
+
             })
 
     df_os = pd.DataFrame(os_data)
